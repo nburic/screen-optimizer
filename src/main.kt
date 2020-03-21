@@ -1,5 +1,4 @@
 import java.io.File
-import java.io.InputStream
 
 private class InputModel(val width: Int, val height: Int, val text: String) {
     override fun toString(): String {
@@ -7,73 +6,7 @@ private class InputModel(val width: Int, val height: Int, val text: String) {
     }
 }
 
-private val inputs = listOf(
-    InputModel(20, 6, "led display"),
-    InputModel(100, 20, "led display 2020"),
-    InputModel(10, 20, "MUST BE ABLE TO DISPLAY"),
-    InputModel(55, 25, "Can you hack"),
-    InputModel(100, 20, "display product text")
-)
-
-fun main() {
-    val inputs = mutableListOf<InputModel>()
-
-    val file = File("src/vhodi.txt")
-    file.forEachLine {
-        val width = it.substringBefore(" ")
-        val height = it.substringAfter(" ").substringBefore(" ")
-        val text = it.substringAfter(" ").substringAfter(" ")
-
-        inputs.add(InputModel(width = width.toInt(), height = height.toInt(), text = text))
-    }
-
-    inputs.forEach {
-        println("$it -> ${calculate(it.text, it.width, it.height)}")
-    }
-}
-
-class Line() {
-
-    var words: MutableList<String> = mutableListOf()
-
-    constructor(line: Line) : this() {
-        line.words.forEach {
-            words.add(it)
-        }
-    }
-
-    constructor(words: MutableList<String>) : this() {
-        this.words = words
-    }
-
-    fun getLastWord(): String {
-        return words[words.size - 1]
-    }
-
-    fun hasOneWord(): Boolean {
-        return words.size == 1
-    }
-
-    fun addWord(word: String) {
-        words.add(0, word)
-    }
-
-    fun removeLastWord() {
-        words.removeAt(words.size - 1)
-    }
-
-    fun getCharLength(): Int {
-        var len = 0
-
-        words.forEach {
-            len += it.length
-        }
-
-        return len + words.size - 1
-    }
-}
-
-class OutputModel() {
+private class OutputModel() {
     private var _lines: MutableList<Line> = mutableListOf()
 
     constructor(line: Line) : this() {
@@ -115,18 +48,112 @@ class OutputModel() {
     }
 }
 
+private class Line() {
+    var words: MutableList<String> = mutableListOf()
+
+    constructor(line: Line) : this() {
+        line.words.forEach {
+            words.add(it)
+        }
+    }
+
+    constructor(words: MutableList<String>) : this() {
+        this.words = words
+    }
+
+    fun getLastWord(): String {
+        return words[words.size - 1]
+    }
+
+    fun hasOneWord(): Boolean {
+        return words.size == 1
+    }
+
+    fun addWord(word: String) {
+        words.add(0, word)
+    }
+
+    fun removeLastWord() {
+        words.removeAt(words.size - 1)
+    }
+
+    fun getCharLength(): Int {
+        var len = 0
+
+        words.forEach {
+            len += it.length
+        }
+
+        return len + words.size - 1
+    }
+}
+
+fun main() {
+    val testInputs = listOf(
+        InputModel(20, 6, "led display"),
+        InputModel(100, 20, "led display 2020"),
+        InputModel(10, 20, "MUST BE ABLE TO DISPLAY"),
+        InputModel(55, 25, "Can you hack"),
+        InputModel(100, 20, "display product text")
+    )
+
+    val inputs = mutableListOf<InputModel>()
+
+    val file = File("src/vhodi.txt")
+    file.forEachLine {
+        val width = it.substringBefore(" ")
+        val height = it.substringAfter(" ").substringBefore(" ")
+        val text = it.substringAfter(" ").substringAfter(" ")
+
+        inputs.add(InputModel(width = width.toInt(), height = height.toInt(), text = text))
+    }
+
+    inputs.forEach {
+        println("$it -> ${calculate(it.text, it.width, it.height)}")
+    }
+//    testInputs.forEach {
+//        println("$it -> ${calculate(it.text, it.width, it.height)}")
+//    }
+}
+
+/**
+ * Calculates best char size to take as much screen size as possible.
+ * @param text text to fit in the screen
+ * @param screenWidth  screen width
+ * @param screenHeight screen height
+ * @return char size for the best result (min screen size remaining) and 0 if it cannot fit in the screen
+ */
 private fun calculate(text: String, screenWidth: Int, screenHeight: Int): Int {
-    val words = getWords(text)
+    val outputs = getOutputs(text)
+    val results = getResults(outputs, screenWidth, screenHeight)
+
+    // get best output
+    return results.minBy { it.first }?.second ?: 0
+}
+
+/**
+ * Generates every possible output for given text. Splitting every line if it
+ * contains more than one word by putting last word of current line to the
+ * start of next line, until every line only has one word.
+ * Starting case: May the force be with you
+ * Ending case: May
+ *              the
+ *              force
+ *              be
+ *              with
+ *              you
+ * @param text starting text
+ * @return [List] of all possible outputs
+ */
+private fun getOutputs(text: String): List<OutputModel> {
+    val words = text.split(" ")
     val startLine = Line(words.toMutableList())
-
-    val lines = mutableListOf<Line>()
-    lines.add(startLine)
-
-    var i = 0
+    val lines = mutableListOf(startLine)
 
     val outputs = mutableListOf<OutputModel>()
     outputs.add(OutputModel(Line(words.toMutableList())))
 
+    var i = 0
     while (lines.size < words.size) {
         if (!lines[i].hasOneWord()) {
             val lastWord = lines[i].getLastWord()
@@ -143,16 +170,27 @@ private fun calculate(text: String, screenWidth: Int, screenHeight: Int): Int {
                 linesClone.add(Line(it))
             }
 
-            val outPut = OutputModel(linesClone)
-
-            outputs.add(outPut)
+            outputs.add(OutputModel(linesClone))
         } else {
             i++
         }
     }
 
-    var remainedScreen = screenWidth * screenHeight
-    // remaineder and charsize
+    return outputs
+}
+
+/**
+ * Sets the result of remaining pixels on the screen and character size for each output.
+ * For each output it calculates max possible character size by taking the longest line
+ * and dividing it by screen width. Then checks if it fits into screen height (chars have to have
+ * same width and height). If it does not fit to screen height, it shrinks size until it fits.
+ * In the last step it saves remaining space of the screen and char size into list of results.
+ * @param outputs list of possible outputs
+ * @param screenWidth available screen width
+ * @param screenHeight available screen height
+ * @return [List] of [Pair] of remaining pixels and character size
+ */
+private fun getResults(outputs: List<OutputModel>, screenWidth: Int, screenHeight: Int): List<Pair<Int, Int>> {
     val results = mutableListOf<Pair<Int, Int>>()
 
     outputs.forEach {
@@ -170,18 +208,10 @@ private fun calculate(text: String, screenWidth: Int, screenHeight: Int): Int {
 
         // calculate taken space
         val takenSpace = it.getTakenSpace(charSize)
-
-        remainedScreen = screenWidth * screenHeight - takenSpace
+        val remainedScreen = screenWidth * screenHeight - takenSpace
 
         results.add(Pair(remainedScreen, charSize))
     }
 
-    // get best output
-    val res = results.minBy { it.first }?.second ?: 0
-
-    return res
-}
-
-private fun getWords(text: String): List<String> {
-    return text.split(" ")
+    return results.toList()
 }
